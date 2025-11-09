@@ -1096,11 +1096,51 @@ export const CreditsProvider: React.FC<{ children: ReactNode }> = ({ children })
   useEffect(() => {
     const checkSubscriptionSuccess = async () => {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('subscription') === 'success' && currentUser) {
+      const planId = params.get('plan_id');
+      
+      if (params.get('subscription') === 'success' && currentUser && planId) {
         // Wait a bit for webhook to process
-        setTimeout(async () => {
-          await reloadUserSubscription();
-        }, 2000);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Check if subscription was created by webhook
+        const { data: existingSub } = await supabase
+          .from('user_subscriptions')
+          .select('id')
+          .eq('user_id', currentUser.id)
+          .eq('status', 'active')
+          .maybeSingle();
+        
+        // If webhook didn't create it (free plan or webhook not configured), create it manually
+        if (!existingSub) {
+          console.log('Creating subscription manually as fallback');
+          
+          const { data: plan } = await supabase
+            .from('subscription_plans')
+            .select('*')
+            .eq('id', planId)
+            .single();
+          
+          if (plan) {
+            // Calculate renewal date (30 days from now)
+            const renewDate = new Date();
+            renewDate.setDate(renewDate.getDate() + 30);
+            
+            await supabase.from('user_subscriptions').insert({
+              user_id: currentUser.id,
+              plan_id: planId,
+              status: 'active',
+              renews_on: renewDate.toISOString(),
+            });
+            
+            console.log('Subscription created successfully');
+          }
+        }
+        
+        // Reload subscription data
+        await reloadUserSubscription();
+        
+        // Clear the URL parameters
+        window.history.replaceState({}, '', window.location.pathname);
       }
     };
     
