@@ -123,7 +123,7 @@ serve(async (req) => {
           },
         ],
         mode: 'subscription',
-        success_url: `${req.headers.get('origin') || 'http://localhost:8080'}/?subscription=success&session_id={CHECKOUT_SESSION_ID}`,
+        success_url: `${req.headers.get('origin') || 'http://localhost:8080'}/?subscription=success`,
         cancel_url: `${req.headers.get('origin') || 'http://localhost:8080'}/?subscription=cancelled`,
         metadata: {
           user_id: user.id,

@@ -150,35 +150,15 @@ const Store: React.FC<{ navigate: (screen: Screen) => void; }> = ({ navigate }) 
                     <p>Please <button onClick={() => navigate('manage-subscription')} className="font-bold underline hover:text-white">cancel your current plan</button> to subscribe to a new one.</p>
                 </div>
             )}
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-                <div>
-                    <h2 className="text-2xl font-bold text-white mb-6">USD Plans</h2>
-                    <div className="grid grid-cols-1 gap-6">
-                        {subscriptionPlans.filter(plan => plan.currency === 'USD').map(plan => (
-                            <SubscriptionPlanCard 
-                                key={plan.id}
-                                plan={plan}
-                                isAdmin={isDeveloper}
-                                onEdit={() => setEditingPlan(plan)}
-                            />
-                        ))}
-                    </div>
-                </div>
-                
-                <div>
-                    <h2 className="text-2xl font-bold text-white mb-6">Planos BR</h2>
-                    <div className="grid grid-cols-1 gap-6">
-                        {subscriptionPlans.filter(plan => plan.currency === 'BRL').map(plan => (
-                            <SubscriptionPlanCard 
-                                key={plan.id}
-                                plan={plan}
-                                isAdmin={isDeveloper}
-                                onEdit={() => setEditingPlan(plan)}
-                            />
-                        ))}
-                    </div>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {subscriptionPlans.map(plan => (
+                    <SubscriptionPlanCard 
+                        key={plan.id}
+                        plan={plan}
+                        isAdmin={isDeveloper}
+                        onEdit={() => setEditingPlan(plan)}
+                    />
+                ))}
             </div>
          </div>
       )}
