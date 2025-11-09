@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/functions-js": "^2.80.0",
     "@supabase/supabase-js": "^2.80.0",
     "autoprefixer": "^10.4.21",
     "lovable-tagger": "^1.1.11",

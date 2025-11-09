@@ -26,8 +26,7 @@ export default defineConfig(({ mode }) => {
       build: {
         rollupOptions: {
           external: [
-            /^supabase\//,
-            /@supabase\/functions/
+            /^supabase\//
           ]
         }
       }
