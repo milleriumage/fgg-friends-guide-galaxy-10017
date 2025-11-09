@@ -15,7 +15,7 @@ const Store: React.FC<{ navigate: (screen: Screen) => void; }> = ({ navigate }) 
     const { addCredits, subscriptionPlans, creditPackages, userSubscription, userRole } = useCredits();
     const [loadingPackage, setLoadingPackage] = useState<string | null>(null);
     const [notification, setNotification] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'credits' | 'plans' | 'br-plans'>('credits');
+    const [activeTab, setActiveTab] = useState<'credits' | 'plans'>('credits');
     const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null);
     const [editingCreditPack, setEditingCreditPack] = useState<CreditPackage | null>(null);
 
@@ -79,7 +79,7 @@ const Store: React.FC<{ navigate: (screen: Screen) => void; }> = ({ navigate }) 
         }
     };
 
-    const TabButton: React.FC<{tab: 'credits' | 'plans' | 'br-plans', label: string}> = ({tab, label}) => (
+    const TabButton: React.FC<{tab: 'credits' | 'plans', label: string}> = ({tab, label}) => (
         <button
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-lg font-semibold rounded-t-lg transition-colors ${activeTab === tab ? 'bg-neutral-800 text-white' : 'text-neutral-400 hover:text-white'}`}
@@ -104,7 +104,6 @@ const Store: React.FC<{ navigate: (screen: Screen) => void; }> = ({ navigate }) 
         <div className="flex">
             <TabButton tab="credits" label="Credit Packs" />
             <TabButton tab="plans" label="Subscription Plans" />
-            <TabButton tab="br-plans" label="BR Subscriptions" />
         </div>
       </div>
 
@@ -151,36 +150,35 @@ const Store: React.FC<{ navigate: (screen: Screen) => void; }> = ({ navigate }) 
                     <p>Please <button onClick={() => navigate('manage-subscription')} className="font-bold underline hover:text-white">cancel your current plan</button> to subscribe to a new one.</p>
                 </div>
             )}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {subscriptionPlans.filter(plan => plan.currency === 'USD').map(plan => (
-                    <SubscriptionPlanCard 
-                        key={plan.id}
-                        plan={plan}
-                        isAdmin={isDeveloper}
-                        onEdit={() => setEditingPlan(plan)}
-                    />
-                ))}
-            </div>
-         </div>
-      )}
-
-      {activeTab === 'br-plans' && (
-         <div>
-            {userSubscription && (
-                <div className="bg-yellow-900/50 border border-yellow-700 text-yellow-300 px-4 py-3 rounded-lg mb-8 text-center">
-                    <p>Você já tem uma assinatura ativa: <span className="font-bold">{userSubscription.name}</span>. </p>
-                    <p>Por favor, <button onClick={() => navigate('manage-subscription')} className="font-bold underline hover:text-white">cancele seu plano atual</button> para assinar um novo.</p>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+                <div>
+                    <h2 className="text-2xl font-bold text-white mb-6">USD Plans</h2>
+                    <div className="grid grid-cols-1 gap-6">
+                        {subscriptionPlans.filter(plan => plan.currency === 'USD').map(plan => (
+                            <SubscriptionPlanCard 
+                                key={plan.id}
+                                plan={plan}
+                                isAdmin={isDeveloper}
+                                onEdit={() => setEditingPlan(plan)}
+                            />
+                        ))}
+                    </div>
                 </div>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {subscriptionPlans.filter(plan => plan.currency === 'BRL').map(plan => (
-                    <SubscriptionPlanCard 
-                        key={plan.id}
-                        plan={plan}
-                        isAdmin={isDeveloper}
-                        onEdit={() => setEditingPlan(plan)}
-                    />
-                ))}
+                
+                <div>
+                    <h2 className="text-2xl font-bold text-white mb-6">Planos BR</h2>
+                    <div className="grid grid-cols-1 gap-6">
+                        {subscriptionPlans.filter(plan => plan.currency === 'BRL').map(plan => (
+                            <SubscriptionPlanCard 
+                                key={plan.id}
+                                plan={plan}
+                                isAdmin={isDeveloper}
+                                onEdit={() => setEditingPlan(plan)}
+                            />
+                        ))}
+                    </div>
+                </div>
             </div>
          </div>
       )}
