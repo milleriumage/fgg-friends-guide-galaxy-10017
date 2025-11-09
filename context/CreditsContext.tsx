@@ -1059,6 +1059,54 @@ export const CreditsProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, [currentUser, devSettings.withdrawalCooldownHours]);
 
+  // Function to reload user subscription from Supabase
+  const reloadUserSubscription = useCallback(async () => {
+    if (!currentUser) return;
+    
+    try {
+      const { data: subscription } = await supabase
+        .from('user_subscriptions')
+        .select('*, subscription_plans(*)')
+        .eq('user_id', currentUser.id)
+        .eq('status', 'active')
+        .maybeSingle();
+      
+      if (subscription && subscription.subscription_plans) {
+        const plan = subscription.subscription_plans as any;
+        const userSub: UserSubscription = {
+          id: plan.id,
+          name: plan.name,
+          price: parseFloat(plan.price),
+          credits: plan.credits,
+          currency: plan.currency || 'USD',
+          features: plan.features || [],
+          renewsOn: subscription.renews_on,
+          paymentMethod: 'Stripe'
+        };
+        setSubscriptions(prev => ({ ...prev, [currentUser.id]: userSub }));
+      } else {
+        setSubscriptions(prev => ({ ...prev, [currentUser.id]: null }));
+      }
+    } catch (error) {
+      console.error('Error reloading subscription:', error);
+    }
+  }, [currentUser]);
+
+  // Check for subscription success on page load
+  useEffect(() => {
+    const checkSubscriptionSuccess = async () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('subscription') === 'success' && currentUser) {
+        // Wait a bit for webhook to process
+        setTimeout(async () => {
+          await reloadUserSubscription();
+        }, 2000);
+      }
+    };
+    
+    checkSubscriptionSuccess();
+  }, [currentUser, reloadUserSubscription]);
+
   const updateSidebarVisibility = useCallback((updates: Partial<SidebarVisibility>) => {
     setSidebarVisibility(prev => ({ ...prev, ...updates }));
   }, []);

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCredits } from '../hooks/useCredits';
 import { Screen } from '../types';
 import CancelSubscriptionModal from '../components/CancelSubscriptionModal';
@@ -18,6 +18,15 @@ const ManageSubscription: React.FC<ManageSubscriptionProps> = ({ navigate }) => 
         setNotification('Your subscription has been canceled.');
         setTimeout(() => setNotification(null), 3000);
     }
+
+    // Show success message on redirect from Stripe
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('subscription') === 'success') {
+            setNotification('Subscription activated successfully! Welcome to your new plan.');
+            setTimeout(() => setNotification(null), 5000);
+        }
+    }, []);
 
     if (!userSubscription) {
         return (
