@@ -37,8 +37,7 @@ const SubscriptionPlanCard: React.FC<SubscriptionPlanCardProps> = ({ plan, isAdm
             const response = await supabase.functions.invoke('create-stripe-checkout', {
                 body: { 
                     type: 'subscription',
-                    planId: plan.id,
-                    stripeProductId: plan.stripeProductId
+                    planId: plan.id
                 }
             });
 
