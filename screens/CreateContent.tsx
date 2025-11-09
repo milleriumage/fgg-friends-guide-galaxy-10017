@@ -152,7 +152,7 @@ const CreateContent: React.FC<CreateContentProps> = ({ navigate }) => {
             if (uploadedMedia.length > 0) {
                 const mediaRecords = uploadedMedia.map(media => ({
                     content_item_id: contentId,
-                    media_type: media.type,
+                    media_type: media.type as 'image' | 'video',
                     storage_path: media.url,
                     display_order: media.order
                 }));
