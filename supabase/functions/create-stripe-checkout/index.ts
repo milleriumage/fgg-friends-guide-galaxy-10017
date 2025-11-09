@@ -23,6 +23,24 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY') ?? ''
     );
 
+    // Fallback maps when DB rows are missing
+    const CREDIT_PACKAGE_MAP: Record<string, { credits: number; price: number; bonus?: number }> = {
+      'prod_SyYasByos1peGR': { credits: 200, price: 2.0 },
+      'prod_SyYeStqRDuWGFF': { credits: 500, price: 5.0 },
+      'prod_SyYfzJ1fjz9zb9': { credits: 1000, price: 10.0 },
+      'prod_SyYmVrUetdiIBY': { credits: 2500, price: 25.0 },
+      'prod_SyYg54VfiOr7LQ': { credits: 5000, price: 50.0 },
+      'prod_SyYhva8A2beAw6': { credits: 10000, price: 100.0 },
+      'prod_SyYehlUkfzq9Qn': { credits: 100, price: 1.0 },
+    };
+
+    const PLAN_MAP: Record<string, { plan_id: string; credits: number; price: number; currency: string }> = {
+      'prod_SyYChoQJbIb1ye': { plan_id: 'plan_free', credits: 0, price: 0, currency: 'usd' },
+      'prod_SyYK31lYwaraZW': { plan_id: 'plan_basic', credits: 1000, price: 9, currency: 'usd' },
+      'prod_SyYMs3lMIhORSP': { plan_id: 'plan_pro', credits: 2000, price: 15, currency: 'usd' },
+      'prod_SyYVIP': { plan_id: 'plan_vip', credits: 4000, price: 25, currency: 'usd' },
+    };
+
     // Get authenticated user
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -68,35 +86,60 @@ serve(async (req) => {
         pkgError = result.error;
       }
 
-      if (pkgError || !pkg) {
-        console.error('Package lookup error:', pkgError);
+      const fallback = stripeProductId ? CREDIT_PACKAGE_MAP[stripeProductId] : undefined;
+      const productId = pkg?.stripe_product_id || stripeProductId || null;
+      const finalCredits = pkg?.credits ?? fallback?.credits;
+      const bonus = pkg?.bonus ?? fallback?.bonus ?? 0;
+      const finalAmountCents = typeof pkg?.price === 'number' ? Math.round(pkg.price * 100)
+        : (fallback?.price ? Math.round(fallback.price * 100) : undefined);
+
+      if (!productId && finalAmountCents === undefined) {
+        console.error('Package not found in DB and no fallback available');
         throw new Error('Credit package not found');
       }
 
-      sessionParams = {
-        payment_method_types: ['card'],
-        line_items: [
-          {
+      // Try to use an existing one-time price on Stripe for the product
+      let priceId: string | undefined;
+      if (productId) {
+        const list = await stripe.prices.list({ product: productId, active: true, type: 'one_time' });
+        priceId = list.data[0]?.id;
+        if (!priceId && finalAmountCents !== undefined) {
+          const created = await stripe.prices.create({
+            product: productId,
+            unit_amount: finalAmountCents,
+            currency: 'usd',
+          });
+          priceId = created.id;
+        }
+      }
+
+      const lineItem: Stripe.Checkout.SessionCreateParams.LineItem = priceId
+        ? { price: priceId, quantity: 1 }
+        : {
             price_data: {
               currency: 'usd',
               product_data: {
-                name: `${pkg.credits} Credits`,
-                description: pkg.bonus > 0 ? `Includes ${pkg.bonus} bonus credits!` : undefined,
+                name: `${finalCredits ?? 'Credits'} Credits`,
+                description: bonus > 0 ? `Includes ${bonus} bonus credits!` : undefined,
               },
-              unit_amount: Math.round(pkg.price * 100),
+              unit_amount: finalAmountCents ?? 0,
             },
             quantity: 1,
-          },
-        ],
+          };
+
+      sessionParams = {
+        payment_method_types: ['card'],
+        line_items: [ lineItem ],
         mode: 'payment',
         success_url: `${req.headers.get('origin') || 'http://localhost:8080'}/?payment=success`,
         cancel_url: `${req.headers.get('origin') || 'http://localhost:8080'}/?payment=cancelled`,
         metadata: {
           user_id: user.id,
-          credits: (pkg.credits + pkg.bonus).toString(),
+          credits: (((finalCredits ?? 0) + (bonus || 0))).toString(),
           type: 'credit_purchase',
         },
       };
+
     } else if (type === 'subscription') {
       // Get subscription plan details - try by stripe_product_id first, then by id
       let plan, planError;
@@ -122,29 +165,34 @@ serve(async (req) => {
         planError = result.error;
       }
 
-      if (planError || !plan) {
-        console.error('Plan lookup error:', planError);
+      // Build from DB or fallback map
+      const productId = plan?.stripe_product_id || stripeProductId || null;
+      const fb = productId ? PLAN_MAP[productId] : undefined;
+      const finalPlanId = planId || fb?.plan_id || 'unknown_plan';
+      const credits = plan?.credits ?? fb?.credits ?? 0;
+      const currency = (plan?.currency || fb?.currency || 'usd').toLowerCase();
+      const amountCents = typeof plan?.price === 'number'
+        ? Math.round(plan.price * 100)
+        : (fb ? Math.round(fb.price * 100) : undefined);
+
+      if (!productId) {
+        console.error('Plan missing product id; no DB row and no fallback');
         throw new Error('Subscription plan not found');
       }
 
-      if (!plan.stripe_product_id) {
-        throw new Error('Stripe product ID not configured for this plan');
-      }
-
-      // Get or create Stripe price
-      const prices = await stripe.prices.list({
-        product: plan.stripe_product_id,
-        active: true,
-      });
-
-      let priceId = prices.data[0]?.id;
+      // Get or create Stripe recurring monthly price for this product
+      const prices = await stripe.prices.list({ product: productId, active: true, type: 'recurring' });
+      let priceId = prices.data.find(p => p.recurring?.interval === 'month')?.id;
 
       if (!priceId) {
-        // Create price if it doesn't exist
+        if (amountCents === undefined) {
+          console.error('Cannot create price: amount unknown');
+          throw new Error('Subscription plan not found');
+        }
         const price = await stripe.prices.create({
-          product: plan.stripe_product_id,
-          unit_amount: Math.round(plan.price * 100),
-          currency: plan.currency.toLowerCase(),
+          product: productId,
+          unit_amount: amountCents,
+          currency,
           recurring: { interval: 'month' },
         });
         priceId = price.id;
@@ -152,21 +200,24 @@ serve(async (req) => {
 
       sessionParams = {
         payment_method_types: ['card'],
-        line_items: [
-          {
-            price: priceId,
-            quantity: 1,
-          },
-        ],
+        line_items: [ { price: priceId, quantity: 1 } ],
         mode: 'subscription',
         success_url: `${req.headers.get('origin') || 'http://localhost:8080'}/?subscription=success`,
         cancel_url: `${req.headers.get('origin') || 'http://localhost:8080'}/?subscription=cancelled`,
         metadata: {
           user_id: user.id,
-          plan_id: planId,
-          credits: plan.credits.toString(),
+          plan_id: finalPlanId,
+          credits: credits.toString(),
           type: 'subscription',
         },
+        subscription_data: {
+          metadata: {
+            user_id: user.id,
+            plan_id: finalPlanId,
+            credits: credits.toString(),
+            type: 'subscription',
+          }
+        }
       };
     } else {
       throw new Error('Invalid type');
