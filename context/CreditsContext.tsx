@@ -1096,13 +1096,15 @@ export const CreditsProvider: React.FC<{ children: ReactNode }> = ({ children })
   useEffect(() => {
     const checkSubscriptionSuccess = async () => {
       const params = new URLSearchParams(window.location.search);
-      const planId = params.get('plan_id');
+      const sessionId = params.get('session_id');
       
-      if (params.get('subscription') === 'success' && currentUser && planId) {
+      if (params.get('subscription') === 'success' && currentUser && sessionId) {
+        console.log('Verifying payment with Stripe before activating subscription...');
+        
         // Wait a bit for webhook to process
         await new Promise(resolve => setTimeout(resolve, 2000));
         
-        // Check if subscription was created by webhook
+        // Check if subscription was already created by webhook
         const { data: existingSub } = await supabase
           .from('user_subscriptions')
           .select('id')
@@ -1110,29 +1112,41 @@ export const CreditsProvider: React.FC<{ children: ReactNode }> = ({ children })
           .eq('status', 'active')
           .maybeSingle();
         
-        // If webhook didn't create it (free plan or webhook not configured), create it manually
+        // If webhook didn't create it, verify payment with Stripe before creating
         if (!existingSub) {
-          console.log('Creating subscription manually as fallback');
-          
-          const { data: plan } = await supabase
-            .from('subscription_plans')
-            .select('*')
-            .eq('id', planId)
-            .single();
-          
-          if (plan) {
-            // Calculate renewal date (30 days from now)
-            const renewDate = new Date();
-            renewDate.setDate(renewDate.getDate() + 30);
-            
-            await supabase.from('user_subscriptions').insert({
-              user_id: currentUser.id,
-              plan_id: planId,
-              status: 'active',
-              renews_on: renewDate.toISOString(),
+          try {
+            // Get the auth token
+            const { data: { session: authSession } } = await supabase.auth.getSession();
+            if (!authSession) {
+              console.error('No auth session found');
+              return;
+            }
+
+            // Call edge function to verify the Stripe session and create subscription
+            const { data, error } = await supabase.functions.invoke('verify-stripe-session', {
+              body: { sessionId },
+              headers: {
+                Authorization: `Bearer ${authSession.access_token}`
+              }
             });
-            
-            console.log('Subscription created successfully');
+
+            if (error) {
+              console.error('Error verifying payment:', error);
+              alert('Failed to verify payment. Please contact support.');
+              return;
+            }
+
+            if (data?.success) {
+              console.log('Payment verified and subscription created');
+            } else {
+              console.error('Payment verification failed:', data?.error);
+              alert('Payment verification failed. Please contact support.');
+              return;
+            }
+          } catch (error) {
+            console.error('Error in payment verification:', error);
+            alert('An error occurred during verification. Please contact support.');
+            return;
           }
         }
         
