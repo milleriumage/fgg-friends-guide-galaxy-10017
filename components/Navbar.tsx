@@ -18,6 +18,9 @@ const Navbar: React.FC<NavbarProps> = ({ navigate }) => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
 
+  console.log('Navbar - userSubscription:', userSubscription);
+  console.log('Navbar - navbarVisibility:', navbarVisibility);
+
   const handleCancelSuccess = () => {
     setShowCancelModal(false);
     setShowPlanModal(false);
